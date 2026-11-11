@@ -1,5 +1,5 @@
-Mitigations
+Input Validation
+The application was tested for improper handling of special and control characters by submitting crafted input containing metacharacters commonly used in injection attacks. In each case the server correctly encoded the special characters before processing and reflection, neutralizing them rather than interpreting them. No injection or input-handling weakness was identified; the input validation and output encoding controls performed as expected.
 
-Use per-host (SAN) certificates where practical. Issue individual certificates (or scoped SAN certs) per service so a compromise is contained to that host rather than the full subdomain space.
-Automate issuance and rotation. Adopt short-lived certificates with automated management (e.g. ACME/Let’s Encrypt or an internal CA) so per-host certs are operationally cheap and keys rotate frequently.
-Protect and segregate private keys. Restrict wildcard-key distribution, store keys in an HSM or secrets manager, avoid deploying the same key to low-trust or third-party systems, and have a tested revocation/re-issuance plan.
+Authorization / Access Control
+The application’s enforcement of privilege boundaries was tested by attempting to issue a request restricted to administrative users from a non-administrative context. The server rejected the request and denied the action, confirming that access control is enforced server-side rather than relying on client-side restrictions alone. No horizontal or vertical privilege-escalation weakness was identified for this action; the authorization control performed as expected.
