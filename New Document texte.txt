@@ -1,8 +1,21 @@
-Input Validation
-The application was tested for improper handling of special and metacharacters by submitting payloads containing characters such as <. In each case the server rejected the request outright, responding with 400 Bad Request rather than processing or reflecting the input. This indicates that input is validated server-side and malformed or potentially malicious requests are refused before handling. No input-validation or injection weakness was identified; the control performed as expected.
+Observation
 
-Broken Access Control
-The application's enforcement of user data boundaries was tested by attempting to access and modify another user's profile and data from the authenticated non-privileged account. All such attempts were denied; the server did not permit reading or editing resources belonging to other users. This confirms that object-level authorization is enforced server-side. No Insecure Direct Object Reference (IDOR) or horizontal privilege-escalation weakness was identified; the control performed as expected.
+During the audit, it was found that the pp-service application returns HTTP security headers that are misconfigured and applied inconsistently across responses. Specifically:
 
-JWT Implementation
-The JSON Web Token authentication was tested for common signature-verification flaws, including submission of a token with the algorithm set to none in an attempt to bypass signature validation. The server rejected the manipulated token, responding with 403 Unauthorized. This indicates that the application enforces its expected signing algorithm and does not accept unsigned or algorithm-downgraded tokens. No JWT signature-bypass weakness was identified; the control performed as expected.
+Weak Content-Security-Policy. The script-src directive permits both 'unsafe-inline' and 'unsafe-eval' (and style-src permits 'unsafe-inline'). These allowances defeat much of the protection CSP is meant to provide, since they permit execution of inline scripts and dynamic code evaluation — the primary vectors a CSP is designed to block.
+Deprecated / inconsistent X-XSS-Protection. The header is set differently across responses (1, 1; mode=block, and 0). This header is deprecated and, in some browsers, its filter can itself introduce vulnerabilities; current guidance is to disable it uniformly (0) and rely on CSP.
+Inconsistent HSTS. Strict-Transport-Security uses max-age=31536000 (one year) on some responses but max-age=15550000 (~180 days) on others, and preload is not set — weakening the consistency and strength of transport security enforcement.
+Duplicate / conflicting headers. Some responses include the same header more than once with differing values (e.g. X-Content-Type-Options and X-XSS-Protection repeated), leaving the effective policy dependent on browser handling rather than explicit configuration.
+
+Impact
+
+This vulnerability carries a moderate impact on the organization: misconfigured security headers weaken the browser-side defenses that mitigate client-side attacks, enlarging the exploitability of other flaws rather than causing compromise directly.
+
+Reduced XSS protection. The permissive CSP (unsafe-inline / unsafe-eval) means that if a cross-site scripting flaw exists anywhere in the application, CSP will not contain it — injected scripts can execute freely.
+Inconsistent transport and defense posture. Varying HSTS values and conflicting header declarations create gaps and ambiguity, reducing the reliability of protections against downgrade, clickjacking, and MIME-sniffing attacks, and signaling weak configuration governance.
+
+Mitigations
+
+Harden the CSP. Remove 'unsafe-inline' and 'unsafe-eval'; adopt nonces or hashes for any required inline scripts/styles so the policy can enforce a strict script source allowlist.
+Standardize headers across all responses. Apply a single, centralized security-header configuration (gateway/reverse-proxy or framework middleware) so every response carries identical, non-duplicated values. Set X-XSS-Protection: 0 uniformly and rely on CSP.
+Strengthen HSTS consistently. Serve Strict-Transport-Security: max-age=31536000; includeSubDomains; preload on every HTTPS response, and resolve all duplicate/conflicting header declarations.
