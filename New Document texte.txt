@@ -1,1 +1,16 @@
-X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*
+Observation
+
+During the audit, it was found that the application's file-upload functionality is vulnerable to arbitrary file upload. The server does not validate the file extension or the declared Content-Type, relying instead solely on inspection of the file content (magic-byte / signature validation). This single control was bypassed by crafting a polyglot file: using Burp, the legitimate PDF's body was stripped and only its opening bytes (the %PDF signature and first header lines) were retained, after which arbitrary PHP code was appended. The file was then uploaded with a .php extension and a PHP Content-Type. Because the content check only inspects the leading signature bytes, the file passed validation while remaining a fully executable PHP script server-side, allowing attacker-controlled code to be uploaded and interpreted.
+
+Consequences
+
+This vulnerability carries a critical impact on the organization: arbitrary file upload leading to code execution is one of the most severe web weaknesses, as it hands an attacker a direct foothold on the server. Because all three validation layers (extension, Content-Type, content signature) are either absent or trivially defeated, the control offers no effective barrier.
+
+Remote code execution and server compromise. The uploaded PHP file can be requested and executed by the server, giving the attacker command execution in the web application's context — enabling webshell deployment, data theft, lateral movement, and potential full compromise of the host.
+Pivot and persistence. A planted webshell provides persistent access and a staging point to attack back-end systems, other hosted applications, and internal infrastructure, amplifying the breach well beyond the initial upload.
+
+Mitigations
+
+Validate on a strict server-side allowlist. Accept only explicitly permitted extensions and MIME types, and verify the full file content against the expected type — not just the leading signature bytes — rejecting anything that does not fully conform.
+Store uploads outside the webroot and disable execution. Serve files from a non-executable location (or dedicated storage/CDN) and explicitly prevent script interpretation in the upload directory (e.g. disable PHP handlers), so an uploaded file can never be executed.
+Rename and neutralize uploaded files. Generate random server-side filenames, strip the original extension, and enforce size/content constraints, removing the attacker's control over the stored file's name and type.
