@@ -1,21 +1,44 @@
 Observation
 
-During the audit, it was found that the pp-service application returns HTTP security headers that are misconfigured and applied inconsistently across responses. Specifically:
+During the audit, it was found that the application does not perform any antivirus or malware scanning on uploaded files. To confirm this, a file containing the EICAR standard antivirus test string (eicar.docx) was uploaded through the application's file-upload functionality. EICAR is a harmless, industry-standard test file that every antivirus engine is designed to detect; its successful upload and storage demonstrates that no scanning control is in place on the upload path. The upload was performed via a POST request to /apclp-webclaims-apis-v1-vrs/vblock.
 
-Weak Content-Security-Policy. The script-src directive permits both 'unsafe-inline' and 'unsafe-eval' (and style-src permits 'unsafe-inline'). These allowances defeat much of the protection CSP is meant to provide, since they permit execution of inline scripts and dynamic code evaluation — the primary vectors a CSP is designed to block.
-Deprecated / inconsistent X-XSS-Protection. The header is set differently across responses (1, 1; mode=block, and 0). This header is deprecated and, in some browsers, its filter can itself introduce vulnerabilities; current guidance is to disable it uniformly (0) and rely on CSP.
-Inconsistent HSTS. Strict-Transport-Security uses max-age=31536000 (one year) on some responses but max-age=15550000 (~180 days) on others, and preload is not set — weakening the consistency and strength of transport security enforcement.
-Duplicate / conflicting headers. Some responses include the same header more than once with differing values (e.g. X-Content-Type-Options and X-XSS-Protection repeated), leaving the effective policy dependent on browser handling rather than explicit configuration.
+The upload feature is reached from the following page:
 
-Impact
+[SCREENSHOT 1 — File upload page]
 
-This vulnerability carries a moderate impact on the organization: misconfigured security headers weaken the browser-side defenses that mitigate client-side attacks, enlarging the exploitability of other flaws rather than causing compromise directly.
+Figure 1: The claims file-upload interface prior to submission.
 
-Reduced XSS protection. The permissive CSP (unsafe-inline / unsafe-eval) means that if a cross-site scripting flaw exists anywhere in the application, CSP will not contain it — injected scripts can execute freely.
-Inconsistent transport and defense posture. Varying HSTS values and conflicting header declarations create gaps and ambiguity, reducing the reliability of protections against downgrade, clickjacking, and MIME-sniffing attacks, and signaling weak configuration governance.
+The eicar.docx file containing the EICAR test signature was selected and submitted through the interface:
+
+[SCREENSHOT 2 — Selecting/uploading eicar.docx from the page]
+
+Figure 2: Uploading the EICAR-laden eicar.docx through the application.
+
+The application accepted and processed the file without error or rejection, confirming successful upload:
+
+[SCREENSHOT 3 — File successfully uploaded]
+
+Figure 3: The application confirms the file was uploaded successfully, with no malware detection or rejection.
+
+The corresponding API request and response were captured in Burp Suite, showing the POST to /apclp-webclaims-apis-v1-vrs/vblock returning a success response:
+
+[SCREENSHOT 4 — Burp Suite request/response]
+
+Figure 4: Burp Suite showing the POST /apclp-webclaims-apis-v1-vrs/vblock request and the server's success response, with no antivirus interception.
+
+Because a universally-detectable test signature was accepted without objection, it is confirmed that uploaded content is not scanned for malware before being stored and made available within the platform.
+
+Consequences
+
+This vulnerability carries a high impact on the organization: the absence of any malware scanning means the platform can be used to store and distribute malicious files, turning a legitimate business feature into a vector for malware delivery.
+
+Malware storage and distribution. Attackers (or compromised users) can upload malicious documents, executables, or macro-laden files that are then stored and potentially served to employees, claims handlers, or other users who download them — exposing internal systems to infection, ransomware, or data theft.
+Downstream and reputational harm. Infected files processed by back-office staff or third parties can lead to internal compromise and, where files are exchanged with clients or partners, propagate the infection externally — creating legal, regulatory, and reputational exposure for the organization.
 
 Mitigations
 
-Harden the CSP. Remove 'unsafe-inline' and 'unsafe-eval'; adopt nonces or hashes for any required inline scripts/styles so the policy can enforce a strict script source allowlist.
-Standardize headers across all responses. Apply a single, centralized security-header configuration (gateway/reverse-proxy or framework middleware) so every response carries identical, non-duplicated values. Set X-XSS-Protection: 0 uniformly and rely on CSP.
-Strengthen HSTS consistently. Serve Strict-Transport-Security: max-age=31536000; includeSubDomains; preload on every HTTPS response, and resolve all duplicate/conflicting header declarations.
+Implement server-side antivirus/malware scanning. Scan every uploaded file with an up-to-date AV/anti-malware engine (ideally multiple engines or a sandbox/CDR solution) before it is stored or made accessible, and reject or quarantine any file that fails.
+Quarantine and isolate on receipt. Hold uploads in an isolated, non-executable staging area until scanning completes, and store accepted files outside the application's execution context to prevent any stored file from being run server-side.
+Enforce upload constraints and logging. Combine scanning with strict file-type allowlisting, size limits, and full logging/alerting on rejected or quarantined uploads so malicious attempts are detected and traceable.
+
+Severity is typically High for an insurance/claims platform handling untrusted user uploads. Note for the report: EICAR confirms scanning is absent — it is not itself malware, so frame the finding as "no AV control on the upload path," which is exactly what you proved. Want this dropped into the same format as your other findings?
