@@ -1,44 +1,7 @@
 Observation
 
-During the audit, it was found that the application does not perform any antivirus or malware scanning on uploaded files. To confirm this, a file containing the EICAR standard antivirus test string (eicar.docx) was uploaded through the application's file-upload functionality. EICAR is a harmless, industry-standard test file that every antivirus engine is designed to detect; its successful upload and storage demonstrates that no scanning control is in place on the upload path. The upload was performed via a POST request to /apclp-webclaims-apis-v1-vrs/vblock.
+During the audit, it was found that the application performs no antivirus or malware scanning on uploaded files. A file containing the EICAR standard antivirus test signature (eicar.docx) was uploaded through the claims upload feature via a POST request to /apclp-webclaims-apis-v1-vrs/vblock, and was accepted, processed, and stored successfully with no detection or rejection. As EICAR is a universally-detectable test file that any antivirus engine is designed to flag, its successful upload confirms that no malware-scanning control exists on the upload path.
 
-The upload feature is reached from the following page:
+Recommendation
 
-[SCREENSHOT 1 — File upload page]
-
-Figure 1: The claims file-upload interface prior to submission.
-
-The eicar.docx file containing the EICAR test signature was selected and submitted through the interface:
-
-[SCREENSHOT 2 — Selecting/uploading eicar.docx from the page]
-
-Figure 2: Uploading the EICAR-laden eicar.docx through the application.
-
-The application accepted and processed the file without error or rejection, confirming successful upload:
-
-[SCREENSHOT 3 — File successfully uploaded]
-
-Figure 3: The application confirms the file was uploaded successfully, with no malware detection or rejection.
-
-The corresponding API request and response were captured in Burp Suite, showing the POST to /apclp-webclaims-apis-v1-vrs/vblock returning a success response:
-
-[SCREENSHOT 4 — Burp Suite request/response]
-
-Figure 4: Burp Suite showing the POST /apclp-webclaims-apis-v1-vrs/vblock request and the server's success response, with no antivirus interception.
-
-Because a universally-detectable test signature was accepted without objection, it is confirmed that uploaded content is not scanned for malware before being stored and made available within the platform.
-
-Consequences
-
-This vulnerability carries a high impact on the organization: the absence of any malware scanning means the platform can be used to store and distribute malicious files, turning a legitimate business feature into a vector for malware delivery.
-
-Malware storage and distribution. Attackers (or compromised users) can upload malicious documents, executables, or macro-laden files that are then stored and potentially served to employees, claims handlers, or other users who download them — exposing internal systems to infection, ransomware, or data theft.
-Downstream and reputational harm. Infected files processed by back-office staff or third parties can lead to internal compromise and, where files are exchanged with clients or partners, propagate the infection externally — creating legal, regulatory, and reputational exposure for the organization.
-
-Mitigations
-
-Implement server-side antivirus/malware scanning. Scan every uploaded file with an up-to-date AV/anti-malware engine (ideally multiple engines or a sandbox/CDR solution) before it is stored or made accessible, and reject or quarantine any file that fails.
-Quarantine and isolate on receipt. Hold uploads in an isolated, non-executable staging area until scanning completes, and store accepted files outside the application's execution context to prevent any stored file from being run server-side.
-Enforce upload constraints and logging. Combine scanning with strict file-type allowlisting, size limits, and full logging/alerting on rejected or quarantined uploads so malicious attempts are detected and traceable.
-
-Severity is typically High for an insurance/claims platform handling untrusted user uploads. Note for the report: EICAR confirms scanning is absent — it is not itself malware, so frame the finding as "no AV control on the upload path," which is exactly what you proved. Want this dropped into the same format as your other findings?
+Implement server-side malware scanning on every file upload, scanning each file with an up-to-date antivirus/anti-malware engine before it is stored or made available, and rejecting or quarantining anything that fails. Uploads should be held in an isolated, non-executable staging area until scanning completes and stored outside the application's execution context, combined with strict file-type allowlisting, size limits, and logging and alerting on rejected files so malicious upload attempts are both blocked and traceable.
