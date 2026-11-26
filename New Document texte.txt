@@ -1,7 +1,29 @@
-Observation
+1. Missing Server-Side Session Validation on Sensitive Functions
 
-During the audit, it was found that the application performs no antivirus or malware scanning on uploaded files. A file containing the EICAR standard antivirus test signature (eicar.docx) was uploaded through the claims upload feature via a POST request to /apclp-webclaims-apis-v1-vrs/vblock, and was accepted, processed, and stored successfully with no detection or rejection. As EICAR is a universally-detectable test file that any antivirus engine is designed to flag, its successful upload confirms that no malware-scanning control exists on the upload path.
+Description
+The application does not enforce server-side session management on authenticated functions. The password change endpoint (POST /api/user/renewpassword) processed requests sent without any session cookie. It authorized the operation using only the IPAEksperUserID and UserAccessToken parameters in the request body.
 
-Recommendation
+The only cookie the application uses, TS012a649e, is set by the F5 BIG-IP ASM web application firewall and is not an application session token. The server issued this cookie on any request, including unauthenticated requests to non-existent resources (e.g. GET /nonexistant). The API then accepted it on authenticated operations, so no request was ever tied to an authenticated user session.
 
-Implement server-side malware scanning on every file upload, scanning each file with an up-to-date antivirus/anti-malware engine before it is stored or made available, and rejecting or quarantining anything that fails. Uploads should be held in an isolated, non-executable staging area until scanning completes and stored outside the application's execution context, combined with strict file-type allowlisting, size limits, and logging and alerting on rejected files so malicious upload attempts are both blocked and traceable.
+Impact
+An attacker who obtains or replays a user's identifier and access token can perform sensitive operations, such as changing the password, without authenticating. This leads to full account takeover.
+
+2. Web Application Firewall Cookie Integrity Bypass
+
+Description
+The F5 BIG-IP ASM checks the integrity of its TS012a649e cookie and blocks requests with a modified value ("Request Rejected" page with a support ID). This check only applies to the expected cookie name. When the cookie was renamed, or replaced with an arbitrary name and an invalid value, the WAF forwarded the request to the backend, which processed it successfully ("isSuccess": true).
+
+Impact
+The WAF's cookie-based protection can be bypassed with very little effort. Requests that should be blocked at the perimeter reach the application, which weakens defense in depth and makes it easier to exploit the other findings in this report.
+
+3. Multi-Factor Authentication Bypass via Client-Side Enforcement
+
+Description
+The authentication endpoint (POST /api/user/login) returns the MFA state to the client through the twoFARequired and mfaSetupRequired parameters. These controls are enforced only by the front end; the server does not validate them. By intercepting and modifying the login response after submitting valid credentials, the following scenarios were demonstrated:
+
+OTP verification bypass: Changing twoFARequired from true to false skipped the one-time password step and gave full access to the application (/InsuranceServices).
+Mandatory MFA enrollment bypass: On provider accounts that had not yet enrolled, setting both twoFARequired and mfaSetupRequired to false skipped the Google Authenticator setup. This gave access to the provider interface (/UnprocessedServices), including the AXA Inventory, Invoicing, and Fee Calculation modules.
+Unauthorized MFA re-enrollment: On accounts with MFA already set up, changing mfaSetupRequired from false to true brought back the enrollment page. That page showed a new QR code and the TOTP secret key in clear text, which allowed an additional authenticator device to be registered.
+
+Impact
+MFA provides no effective protection: valid credentials alone are enough to authenticate, including on privileged provider accounts. Through re-enrollment, an attacker can also register their own authenticator device and keep MFA-backed access after the legitimate user resets their password.
